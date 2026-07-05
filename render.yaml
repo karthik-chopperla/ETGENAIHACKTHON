@@ -1,8 +1,6 @@
 # Render Blueprint — deploys both services from one file.
 # Usage: Render dashboard -> New+ -> Blueprint -> connect this repo.
-# NOTE: not verified against a live Render deploy (no account access from here) —
-# double-check field names against Render's current Blueprint docs on first run,
-# and fill in NVIDIA_API_KEY manually (marked sync: false, never stored in the repo).
+# Fill in NVIDIA_API_KEY manually (marked sync: false, never stored in the repo).
 
 services:
   - type: web
@@ -23,7 +21,6 @@ services:
   - type: web
     name: ikis-frontend
     env: static
-    plan: free
     buildCommand: npm install && npm run build
     staticPublishPath: ./build
     envVars:
