@@ -461,17 +461,28 @@ def query_rag_system(query: str, top_k: int = 5) -> RAGResponse:
         )
 
 def _get_equipment_history(equipment_id: str, limit: int = 10) -> List[Dict[str, Any]]:
-    """Graph traversal step: documents that DESCRIBE this equipment, most recent first."""
+    """
+    Documents describing this equipment, most recent first. Combines two
+    retrieval paths: graph traversal (exact-match equipment tag from entity
+    extraction) and semantic search (robust to the LLM tagging a document
+    under a variant label, e.g. "Unit 2" instead of "COMPRESSOR-02", which
+    would otherwise make the graph silently miss a real, relevant document).
+    """
     with graph_lock:
         if graph.has_node(equipment_id):
-            doc_ids = [
+            doc_ids = {
                 u for u in graph.predecessors(equipment_id)
                 if graph.nodes[u].get("type") == "Document"
-            ]
+            }
         else:
-            doc_ids = []
-        doc_ids.sort(key=lambda d: graph.nodes[d].get("created_at", ""), reverse=True)
-        doc_ids = doc_ids[:limit]
+            doc_ids = set()
+
+    if vector_store:
+        try:
+            semantic_docs = vector_store.similarity_search(equipment_id, k=limit)
+            doc_ids.update(d.metadata.get("doc_id") for d in semantic_docs if d.metadata.get("doc_id"))
+        except Exception as e:
+            logger.warning(f"Equipment history semantic fallback failed: {e}")
 
     if not doc_ids:
         return []
@@ -479,6 +490,7 @@ def _get_equipment_history(equipment_id: str, limit: int = 10) -> List[Dict[str,
     session = SessionLocal()
     records = session.query(DocumentRecord).filter(DocumentRecord.id.in_(doc_ids)).all()
     session.close()
+    records.sort(key=lambda r: r.uploaded_at, reverse=True)
     return [
         {
             "doc_id": r.id,
@@ -486,7 +498,7 @@ def _get_equipment_history(equipment_id: str, limit: int = 10) -> List[Dict[str,
             "uploaded_at": r.uploaded_at.isoformat(),
             "excerpt": (r.content or "")[:800]
         }
-        for r in records
+        for r in records[:limit]
     ]
 
 def analyze_maintenance_patterns(equipment_id: str) -> List[MaintenanceRecommendation]:
