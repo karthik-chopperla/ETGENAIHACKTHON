@@ -4,8 +4,8 @@
 
 Ingests engineering, maintenance, safety, and compliance documents — text, PDF, or a photo/scan
 of a form or drawing — and makes their collective intelligence queryable, actionable, and
-continuously updated. Seven capabilities, all backed by real inference against real uploaded
-documents, verified end-to-end.
+continuously updated. Eight capabilities, all backed by real inference against real uploaded
+documents, verified end-to-end (12/12 on the multi-endpoint benchmark).
 
 ## What's real vs. demo
 
@@ -24,6 +24,7 @@ pretends to be live.
 | Maintenance | Predictive maintenance recommendations grounded in an equipment's real document history via knowledge-graph traversal. |
 | Maintenance → RCA | Multi-step Root Cause Analysis agent: three independent retrieval steps (equipment history via graph traversal, safety procedures via semantic search, regulations via semantic search) feeding one synthesis step — distinguishes immediate cause from root cause. |
 | Compliance | Gap detection. Grounded in real uploaded regulatory documents when any exist (cross-referenced against operational documents); clearly labeled as a representative scenario when none have been uploaded yet. |
+| Compliance → Quality Deviations | Flags measurable parameters (vibration, temperature, etc.) explicitly reported as deviating from a stated baseline in uploaded inspection/maintenance records, with escalating severity — grounded in real numbers, never invented. |
 | Lessons Learned | Cross-document pattern detection over incident/near-miss/audit reports — surfaces systemic root causes that no single-document review would catch, with a proactive recommended action. |
 | Overview | KPIs and workflow summary. |
 
@@ -45,6 +46,7 @@ pretends to be live.
 │   └── index.js
 ├── public/index.html
 ├── package.json
+├── render.yaml                  Render Blueprint — deploys both services from one file
 └── IKIS_demo_video.webm
 ```
 
@@ -91,6 +93,7 @@ python evaluate_benchmark.py   # writes BENCHMARK_RESULTS.md
 | GET | `/api/maintenance/recommendations/{equipment_id}` | Graph-grounded predictive maintenance |
 | GET | `/api/maintenance/rca/{equipment_id}` | Multi-step Root Cause Analysis |
 | GET | `/api/compliance/gaps` | Regulatory compliance gap detection |
+| GET | `/api/quality/deviations` | Measurable quality deviation flagging |
 | GET | `/api/lessons-learned/patterns` | Cross-document failure pattern detection |
 | GET | `/api/health` | Component status |
 
@@ -98,21 +101,37 @@ Full interactive docs at `/docs` once the backend is running.
 
 ## Evaluation
 
-`ikis-backend/BENCHMARK_RESULTS.md` has the latest run: 8 questions grounded in the actual sample
-corpus (7 real facts + 1 negative control), scored by keyword coverage, with response times and a
-deliberately honest comparison against a naive keyword-search baseline — this is an automated
+`ikis-backend/BENCHMARK_RESULTS.md` has the latest run: **12/12 passed** across all five AI-backed
+capabilities (RAG query, maintenance recommendations, RCA, compliance, lessons learned), grounded
+in the actual sample corpus, scored by keyword/content coverage, with response times and a
+deliberately honest comparison against a naive keyword-search baseline. It also documents a real
+finding: under sustained heavy testing, response times degraded to 30-140s due to shared free-tier
+NVIDIA API rate limiting — correctness held throughout, but this is the actual scalability
+bottleneck, not the application code (which was separately verified to stay responsive to other
+requests while a slow LLM call is in flight, via `asyncio.to_thread`). This is an automated
 regression proxy, not a substitute for real domain-expert grading.
+
+## Deployment
+
+`render.yaml` is a Render Blueprint that declares both services (backend + static frontend) for a
+near-one-click deploy — connect the repo under Render's Blueprint flow and fill in `NVIDIA_API_KEY`
+when prompted. It hasn't been run against a live Render account from here, so double-check field
+names against Render's current Blueprint docs on first use. `DEPLOYMENT_GUIDE_UPDATED.md` has the
+manual step-by-step alternative (update its env var names from `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`
+to `NVIDIA_API_KEY`).
 
 ## Known gaps
 
-- True P&ID schematic computer vision (symbol/line/instrument recognition) is not implemented.
-  Image uploads are read via a vision-language model for text/tag transcription — genuine OCR and
-  document intelligence, but not diagram-structure parsing.
-- No QMS system integration — there's no specific target system named in scope, and none is wired up.
+- True P&ID schematic computer vision (ISA symbol libraries, instrument bubbles, line-type/pipe-class
+  recognition) is not implemented. What does work, tested on a synthetic diagram: the vision model
+  correctly read equipment tags **and** inferred basic flow relationships (e.g. `TANK-101 -> PUMP-001
+  -> VLV-201 -> TANK-102`) from a simple layout — real partial diagram-structure understanding, not
+  just text transcription, but unvalidated against dense, real industry-standard drawings.
+- No QMS system integration — there's no specific target system named in scope. What's built instead
+  is quality-deviation flagging from uploaded records (see Compliance tab), which covers the brief's
+  "flagging quality deviations" language without a specific external system to integrate with.
 - Compliance mapping is grounded in whatever regulatory documents you've actually uploaded; without
   any uploaded, it falls back to clearly-labeled representative scenarios rather than a maintained
   ontology of the full text of OISD/Factory Act/PESO.
-- The benchmark set is small (8 questions) and automated (keyword match), not a large domain-expert-
-  graded suite.
-- Not yet deployed to a public URL — see `DEPLOYMENT_GUIDE_UPDATED.md` for the Render steps
-  (update the env var names there from `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` to `NVIDIA_API_KEY`).
+- The benchmark set is still automated (keyword/content match), not a large domain-expert-graded suite.
+- Not yet deployed to a public URL — `render.yaml` is ready but unexecuted; needs your Render account.

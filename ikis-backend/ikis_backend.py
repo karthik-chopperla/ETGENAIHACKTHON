@@ -174,6 +174,14 @@ class RCAReport(BaseModel):
     relevant_procedures: List[str]
     relevant_regulations: List[str]
 
+class QualityDeviation(BaseModel):
+    parameter: str
+    observed_value: str
+    expected_or_baseline: str
+    severity: str  # low, medium, high
+    evidence_doc_id: str
+    recommended_action: str
+
 # ============= CORE FUNCTIONS =============
 
 def parse_llm_json(text: str):
@@ -712,6 +720,78 @@ def check_compliance_gaps(doc_type: str = "all") -> List[ComplianceGap]:
         logger.error(f"Compliance check error: {e}")
         return []
 
+def detect_quality_deviations() -> List[QualityDeviation]:
+    """
+    Quality deviation flagging: scans uploaded inspection/maintenance/equipment
+    documents for measurable parameters (vibration, temperature, pressure,
+    clearance, etc.) explicitly reported as deviating from a stated baseline
+    or spec, and flags them before they escalate into a compliance gap or
+    safety incident. Grounded in the actual uploaded text — will not invent
+    numbers that aren't present in the documents.
+    """
+    if not NVIDIA_API_KEY:
+        return []
+
+    try:
+        session = SessionLocal()
+        records = (
+            session.query(DocumentRecord)
+            .filter(DocumentRecord.doc_type.in_(["inspection_report", "maintenance_log", "equipment_manual"]))
+            .limit(15)
+            .all()
+        )
+        session.close()
+
+        if not records:
+            return []
+
+        docs_text = "\n\n".join(f"[{r.id}] ({r.doc_type})\n{(r.content or '')[:1000]}" for r in records)
+
+        client = NvidiaClient(base_url=NVIDIA_BASE_URL, api_key=NVIDIA_API_KEY)
+        prompt = f"""
+        You are a quality engineer reviewing inspection and maintenance records below.
+
+        {docs_text}
+
+        Identify specific measurable parameters (vibration, temperature, pressure, clearance,
+        lubricant condition, etc.) that are reported as deviating from a stated baseline, spec,
+        or normal range. Only report deviations explicitly evidenced in the text above — do not
+        invent numbers that aren't present in the documents. If nothing measurable deviates,
+        return an empty array.
+
+        Return a JSON array:
+        [
+            {{
+                "parameter": "e.g. Vibration (PUMP-001)",
+                "observed_value": "the reported value",
+                "expected_or_baseline": "the stated baseline or spec",
+                "severity": "low|medium|high",
+                "evidence_doc_id": "the [doc_id] this came from",
+                "recommended_action": "specific next step"
+            }}
+        ]
+        """
+        completion = client.chat.completions.create(
+            model=NVIDIA_CHAT_MODEL,
+            max_tokens=900,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        data = parse_llm_json(completion.choices[0].message.content)
+        return [
+            QualityDeviation(
+                parameter=d["parameter"],
+                observed_value=d["observed_value"],
+                expected_or_baseline=d["expected_or_baseline"],
+                severity=d.get("severity", "medium"),
+                evidence_doc_id=d.get("evidence_doc_id", ""),
+                recommended_action=d["recommended_action"]
+            )
+            for d in data
+        ]
+    except Exception as e:
+        logger.error(f"Quality deviation detection error: {e}")
+        return []
+
 def analyze_lessons_learned() -> List[LessonsPattern]:
     """
     Lessons Learned & Failure Intelligence: analyzes incident/near-miss reports
@@ -918,6 +998,20 @@ async def get_compliance_gaps():
         logger.error(f"Compliance check error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/quality/deviations")
+async def get_quality_deviations():
+    """Flag measurable quality deviations from uploaded inspection/maintenance records."""
+    try:
+        deviations = await asyncio.to_thread(detect_quality_deviations)
+        return {
+            "deviations_found": len(deviations),
+            "deviations": deviations,
+            "report_generated_at": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Quality deviation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/lessons-learned/patterns")
 async def get_lessons_learned():
     """Find systemic patterns across incident/near-miss/audit records."""
@@ -960,6 +1054,7 @@ async def root():
             "maintenance": "GET /api/maintenance/recommendations/{equipment_id}",
             "rca": "GET /api/maintenance/rca/{equipment_id}",
             "compliance": "GET /api/compliance/gaps",
+            "quality_deviations": "GET /api/quality/deviations",
             "lessons_learned": "GET /api/lessons-learned/patterns",
             "health": "GET /api/health"
         }

@@ -54,6 +54,7 @@ export default function IKISApp() {
   const [maintenanceRecs, setMaintenanceRecs] = useState([]);
   const [rcaReport, setRcaReport] = useState(null);
   const [complianceGaps, setComplianceGaps] = useState([]);
+  const [qualityDeviations, setQualityDeviations] = useState([]);
   const [lessonsPatterns, setLessonsPatterns] = useState([]);
   const [lessonsScanned, setLessonsScanned] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState('PUMP-001');
@@ -202,6 +203,12 @@ export default function IKISApp() {
       setMessage('⚠️ Showing demo compliance gaps.');
     } finally {
       setLoading(false);
+    }
+    try {
+      const response = await axios.get(`${BACKEND_URL}/api/quality/deviations`);
+      setQualityDeviations(response.data.deviations || []);
+    } catch (error) {
+      setQualityDeviations([]);
     }
   };
 
@@ -420,6 +427,24 @@ export default function IKISApp() {
                       <h5>Next actions</h5>
                       {gap.remediation_steps.map((step) => <div key={step} style={styles.step}>• {step}</div>)}
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {qualityDeviations.length > 0 && (
+              <div style={styles.gapsList}>
+                <h3 style={{ marginTop: '8px' }}>Quality deviations</h3>
+                {qualityDeviations.map((dev, index) => (
+                  <div key={`${dev.parameter}-${index}`} style={styles.deviationCard}>
+                    <div style={styles.gapHeader}>
+                      <h4>{dev.parameter}</h4>
+                      <span style={{ ...styles.riskBadge, ...(dev.severity === 'high' ? styles.riskHigh : dev.severity === 'low' ? styles.riskLow : styles.riskMedium) }}>
+                        {dev.severity?.toUpperCase()}
+                      </span>
+                    </div>
+                    <p><strong>Observed:</strong> {dev.observed_value} <strong>vs. baseline:</strong> {dev.expected_or_baseline}</p>
+                    <p><strong>Recommended action:</strong> {dev.recommended_action}</p>
+                    <span style={styles.tagProcedure}>📄 {dev.evidence_doc_id}</span>
                   </div>
                 ))}
               </div>
@@ -828,6 +853,12 @@ const styles = {
     borderRadius: '12px',
     padding: '16px',
     backgroundColor: '#faf9ff'
+  },
+  deviationCard: {
+    border: '1px solid #bae6fd',
+    borderRadius: '12px',
+    padding: '16px',
+    backgroundColor: '#f0f9ff'
   },
   riskBadge: {
     fontSize: '11px',
