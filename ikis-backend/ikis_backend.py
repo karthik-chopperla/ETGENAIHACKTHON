@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 # Required Key - powers both embeddings (RAG) and chat completions (entity
 # extraction, RAG answers, maintenance/compliance reasoning) via NVIDIA's
 # OpenAI-compatible NIM API catalog (https://integrate.api.nvidia.com/v1).
-NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY")
+NVIDIA_API_KEY = (os.getenv("NVIDIA_API_KEY") or "").strip() or None
 
 # Knowledge graph persistence path (embedded, no external service required)
 GRAPH_PATH = os.getenv("GRAPH_PATH", "./knowledge_graph.gpickle")
