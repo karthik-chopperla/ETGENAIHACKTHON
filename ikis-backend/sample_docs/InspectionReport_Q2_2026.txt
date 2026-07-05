@@ -1,0 +1,25 @@
+QUARTERLY INSPECTION REPORT - Q2 2026
+Inspector: M. Rao, Certified Pressure Vessel Inspector
+Scope: PUMP-001, BOILER-03, associated pressure vessels
+
+FINDINGS - PUMP-001
+Vibration and seal temperature trend consistent with maintenance log
+WO-4552/WO-4571. Bearing replaced 2026-06-29; post-replacement vibration
+reading 2.6 mm/s, within baseline.
+
+FINDINGS - BOILER-03
+Pressure vessel inspection completed. Certification reference field is
+missing from the inspection record submitted for audit; evidence packet
+otherwise complete. This is a gap against OISD-119 traceability
+requirements pending certification sheet attachment.
+
+FINDINGS - GENERAL
+Training matrix shows 2 operators overdue for SP-014 annual refresher
+(due 2026-05-01, not yet completed as of report date).
+
+Recommendations:
+1. Attach signed certification sheet for BOILER-03 inspection record.
+2. Schedule SP-014 refresher for overdue operators immediately.
+3. Continue weekly vibration monitoring on PUMP-001 through Q3 2026.
+
+Report filed: 2026-06-30.

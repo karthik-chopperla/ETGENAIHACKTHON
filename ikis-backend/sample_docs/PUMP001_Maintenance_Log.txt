@@ -1,0 +1,22 @@
+MAINTENANCE WORK ORDER LOG - PUMP-001
+Facility: Unit 3 Cooling Water Circuit
+
+WO-4471 | 2026-04-02 | Technician: S. Iyer
+Vibration reading: 4.2 mm/s (baseline 2.8 mm/s). Flagged for follow-up.
+Action: Lubrication top-up performed. No leak observed.
+
+WO-4498 | 2026-05-10 | Technician: S. Iyer
+Vibration reading: 5.6 mm/s. Seal temperature 4C above baseline.
+Action: Recommended bearing inspection within 30 days. Deferred due to
+production schedule.
+
+WO-4552 | 2026-06-18 | Technician: A. Kapoor
+Vibration reading: 6.9 mm/s, rising trend confirmed over 3 consecutive
+readings (18% increase over 10 operating cycles). Seal temperature still
+elevated. Escalated to maintenance supervisor.
+
+WO-4571 | 2026-06-29 | Technician: A. Kapoor
+Unplanned stoppage - suspected bearing wear. 6 hours downtime.
+Root cause: delayed bearing replacement from WO-4498 recommendation.
+Corrective action: Replace bearing and seal assembly. Update PM schedule
+to weekly vibration checks for next 90 days.

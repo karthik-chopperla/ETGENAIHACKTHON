@@ -1,0 +1,24 @@
+SAFETY PROCEDURE SP-014: Emergency Shutdown - Rotating Equipment
+Applies to: PUMP-001, COMPRESSOR-02, TURBINE-04
+
+1. PURPOSE
+Defines the emergency shutdown sequence for rotating equipment following
+a vibration alarm, seal failure, or unplanned high-temperature event.
+
+2. PROCEDURE
+Step 1: Operator on duty triggers local E-stop, notifies shift supervisor.
+Step 2: Isolate equipment per Factory Act Sec 37 lockout-tagout protocol.
+Step 3: Verify zero energy state before any inspection begins.
+Step 4: Log incident in the shift roster and notify the plant safety lead.
+Step 5: No restart until maintenance crew confirms seal and lubrication
+health per SP-014 checklist.
+
+3. TRAINING REQUIREMENT
+All operators must complete annual refresher training on this procedure.
+Training acknowledgment must be logged in the LMS within 30 days of the
+refresh cycle. Non-compliance must be reported to the compliance officer.
+
+4. REGULATORY REFERENCE
+OISD-119 (Safety in Petroleum Industry), Factory Act Sec 37, ISO 45001.
+
+Owner: Plant Safety Lead. Last reviewed: 2026-01-15.

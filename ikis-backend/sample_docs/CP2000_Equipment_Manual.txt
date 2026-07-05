@@ -1,0 +1,24 @@
+EQUIPMENT MANUAL: Centrifugal Pump CP-2000 (PUMP-001)
+Manufacturer: FlowTech Industries | Installed: 2019-03-14
+
+1. OVERVIEW
+PUMP-001 is a centrifugal pump rated for 450 GPM at 120 PSI, used in the
+cooling water circuit of Unit 3. Rated operating temperature: 40-85 C.
+
+2. ROUTINE MAINTENANCE SCHEDULE
+- Weekly: Inspect bearing housing for vibration and temperature anomalies.
+- Monthly: Check mechanical seal for leakage, verify lubrication levels.
+- Quarterly: Full vibration analysis per OISD-STD-137.
+- Annually: Replace bearings and inspect impeller for cavitation damage.
+
+3. SAFETY REQUIREMENTS
+Maintenance personnel must follow Factory Act Sec 13 lockout-tagout
+procedures before opening any pressurized casing. PPE required: safety
+glasses, gloves, hearing protection (pump room exceeds 85 dB).
+
+4. KNOWN FAILURE MODES
+- Bearing wear from insufficient lubrication (most common, ~60% of failures)
+- Seal degradation from cavitation
+- Vibration-induced coupling misalignment
+
+Approved by: R. Menon, Chief Engineer. Reviewed: 2025-11-02.

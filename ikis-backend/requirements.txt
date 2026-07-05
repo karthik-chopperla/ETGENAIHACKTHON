@@ -1,0 +1,18 @@
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9
+pydantic>=2.5.0
+python-dotenv>=1.0.0
+
+PyPDF2>=3.0.0
+langchain-text-splitters>=0.0.1
+langchain-nvidia-ai-endpoints>=0.3.0
+langchain-chroma>=0.1.0
+chromadb>=0.4.22
+openai>=1.40.0
+
+sqlalchemy>=2.0.0
+
+# Embedded knowledge graph (entities/relationships), persisted locally —
+# no external graph database required.
+networkx>=3.0
