@@ -52,7 +52,10 @@ export default function IKISApp() {
   const [queryResult, setQueryResult] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [maintenanceRecs, setMaintenanceRecs] = useState([]);
+  const [rcaReport, setRcaReport] = useState(null);
   const [complianceGaps, setComplianceGaps] = useState([]);
+  const [lessonsPatterns, setLessonsPatterns] = useState([]);
+  const [lessonsScanned, setLessonsScanned] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState('PUMP-001');
   const [message, setMessage] = useState('');
   const [pendingDocType, setPendingDocType] = useState('general');
@@ -150,6 +153,41 @@ export default function IKISApp() {
     }
   };
 
+  const handleRunRCA = async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const response = await axios.get(`${BACKEND_URL}/api/maintenance/rca/${selectedEquipment}`);
+      setRcaReport(response.data.report || null);
+      if (!response.data.report) {
+        setMessage(response.data.message || 'No document history found for this equipment yet — upload some first.');
+      }
+    } catch (error) {
+      setRcaReport(null);
+      setMessage(`⚠️ RCA unavailable — backend unreachable at ${BACKEND_URL}.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleScanLessonsLearned = async () => {
+    setLoading(true);
+    setMessage('');
+    setLessonsScanned(true);
+    try {
+      const response = await axios.get(`${BACKEND_URL}/api/lessons-learned/patterns`);
+      setLessonsPatterns(response.data.patterns || []);
+      if (!response.data.patterns?.length) {
+        setMessage('No cross-document patterns found yet — upload at least two incident/near-miss reports to enable pattern detection.');
+      }
+    } catch (error) {
+      setLessonsPatterns([]);
+      setMessage(`⚠️ Lessons Learned unavailable — backend unreachable at ${BACKEND_URL}.`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCheckCompliance = async () => {
     setLoading(true);
     setMessage('');
@@ -190,7 +228,8 @@ export default function IKISApp() {
           { key: 'query', label: '🔍 Expert Query' },
           { key: 'documents', label: '📄 Documents' },
           { key: 'maintenance', label: '⚙️ Maintenance' },
-          { key: 'compliance', label: '✅ Compliance' }
+          { key: 'compliance', label: '✅ Compliance' },
+          { key: 'lessons', label: '🧩 Lessons Learned' }
         ].map((tab) => (
           <button
             key={tab.key}
@@ -269,14 +308,15 @@ export default function IKISApp() {
         {activeTab === 'documents' && (
           <div style={styles.section}>
             <h2>Document ingestion</h2>
-            <p style={styles.description}>Upload equipment manuals, procedures, logs, and regulatory packets.</p>
-            <input ref={fileInputRef} type="file" onChange={handleFileUpload} style={{ display: 'none' }} accept=".pdf,.txt,.docx" />
+            <p style={styles.description}>Upload equipment manuals, procedures, logs, regulatory packets, incident reports — text, PDF, or a photo/scan of a form or drawing (read via vision-model OCR).</p>
+            <input ref={fileInputRef} type="file" onChange={handleFileUpload} style={{ display: 'none' }} accept=".pdf,.txt,.docx,.png,.jpg,.jpeg,.webp,.bmp" />
             <div style={styles.uploadGrid}>
               {[
                 { type: 'pdf', label: 'Equipment Manual', icon: '📕' },
-                { type: 'p&id', label: 'P&ID Drawing', icon: '🔧' },
+                { type: 'p&id', label: 'P&ID / Scanned Form', icon: '🔧' },
                 { type: 'maintenance_log', label: 'Maintenance Record', icon: '📋' },
-                { type: 'regulatory', label: 'Regulatory Pack', icon: '📜' }
+                { type: 'regulatory', label: 'Regulatory Pack', icon: '📜' },
+                { type: 'incident_report', label: 'Incident / Near-Miss', icon: '🚨' }
               ].map((item) => (
                 <div key={item.type} style={styles.uploadCard}>
                   <div style={styles.uploadIcon}>{item.icon}</div>
@@ -313,6 +353,9 @@ export default function IKISApp() {
               <button onClick={handleGetMaintenance} disabled={loading} style={styles.primaryButton}>
                 {loading ? '⏳ Analyzing...' : '🔧 Get recommendations'}
               </button>
+              <button onClick={handleRunRCA} disabled={loading} style={styles.secondaryButton}>
+                {loading ? '⏳ Analyzing...' : '🧠 Run Root Cause Analysis'}
+              </button>
             </div>
             {maintenanceRecs.length > 0 && (
               <div style={styles.recsGrid}>
@@ -324,6 +367,33 @@ export default function IKISApp() {
                     <div style={styles.evidence}>{rec.supporting_evidence.map((item) => <span key={item}>• {item}</span>)}</div>
                   </div>
                 ))}
+              </div>
+            )}
+            {rcaReport && (
+              <div style={styles.rcaBox}>
+                <h3>Root Cause Analysis — {rcaReport.equipment_id}</h3>
+                <div style={styles.rcaRow}>
+                  <span style={styles.rcaLabel}>Immediate cause</span>
+                  <p>{rcaReport.immediate_cause}</p>
+                </div>
+                <div style={styles.rcaRow}>
+                  <span style={styles.rcaLabel}>Root cause</span>
+                  <p>{rcaReport.root_cause}</p>
+                </div>
+                <div style={styles.rcaColumns}>
+                  <div>
+                    <h5>Contributing factors</h5>
+                    {rcaReport.contributing_factors.map((f) => <div key={f} style={styles.step}>• {f}</div>)}
+                  </div>
+                  <div>
+                    <h5>Corrective actions</h5>
+                    {rcaReport.corrective_actions.map((a) => <div key={a} style={styles.step}>• {a}</div>)}
+                  </div>
+                </div>
+                <div style={styles.rcaTags}>
+                  {rcaReport.relevant_procedures.map((p) => <span key={p} style={styles.tagProcedure}>📋 {p}</span>)}
+                  {rcaReport.relevant_regulations.map((r) => <span key={r} style={styles.tagRegulation}>📜 {r}</span>)}
+                </div>
               </div>
             )}
           </div>
@@ -353,6 +423,38 @@ export default function IKISApp() {
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'lessons' && (
+          <div style={styles.section}>
+            <h2>Lessons learned &amp; failure intelligence</h2>
+            <p style={styles.description}>Finds systemic patterns across incident, near-miss, and audit reports that no single review would catch — upload at least two under "Incident / Near-Miss" first.</p>
+            <button onClick={handleScanLessonsLearned} disabled={loading} style={styles.primaryButton}>
+              {loading ? '⏳ Scanning...' : '🧩 Scan for patterns'}
+            </button>
+            {lessonsPatterns.length > 0 && (
+              <div style={styles.gapsList}>
+                {lessonsPatterns.map((p, index) => (
+                  <div key={`${p.pattern}-${index}`} style={styles.lessonCard}>
+                    <div style={styles.gapHeader}>
+                      <h4>{p.pattern}</h4>
+                      <span style={{ ...styles.riskBadge, ...(p.risk_level === 'high' ? styles.riskHigh : p.risk_level === 'low' ? styles.riskLow : styles.riskMedium) }}>
+                        {p.risk_level?.toUpperCase()} RISK
+                      </span>
+                    </div>
+                    <p><strong>Affected equipment:</strong> {p.affected_equipment.join(', ') || 'Not specified'}</p>
+                    <p><strong>Recommended action:</strong> {p.recommended_action}</p>
+                    <div style={styles.rcaTags}>
+                      {p.supporting_doc_ids.map((id) => <span key={id} style={styles.tagProcedure}>📄 {id}</span>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {lessonsScanned && lessonsPatterns.length === 0 && !loading && (
+              <p style={{ ...styles.description, marginTop: '16px' }}>No cross-document pattern found yet. This needs at least two incident/near-miss/audit documents that share a common root cause to detect a genuine pattern.</p>
             )}
           </div>
         )}
@@ -419,14 +521,15 @@ const styles = {
     flexWrap: 'wrap'
   },
   navButton: {
-    padding: '10px 16px',
+    padding: '12px 16px',
     border: '1px solid #dbeafe',
     backgroundColor: 'white',
     cursor: 'pointer',
     borderRadius: '999px',
     fontSize: '14px',
     fontWeight: '600',
-    color: '#1e3a8a'
+    color: '#1e3a8a',
+    minHeight: '44px'
   },
   navButtonActive: {
     backgroundColor: '#2563eb',
@@ -494,11 +597,12 @@ const styles = {
     alignSelf: 'flex-start',
     border: 'none',
     borderRadius: '999px',
-    padding: '10px 16px',
+    padding: '12px 16px',
     backgroundColor: '#2563eb',
     color: 'white',
     cursor: 'pointer',
-    fontWeight: '600'
+    fontWeight: '600',
+    minHeight: '44px'
   },
   resultBox: {
     marginTop: '18px',
@@ -560,10 +664,11 @@ const styles = {
     marginTop: '10px',
     border: 'none',
     borderRadius: '999px',
-    padding: '8px 12px',
+    padding: '10px 16px',
     backgroundColor: '#0f766e',
     color: 'white',
-    cursor: 'pointer'
+    cursor: 'pointer',
+    minHeight: '44px'
   },
   documentsList: {
     marginTop: '18px',
@@ -664,6 +769,83 @@ const styles = {
   step: {
     color: '#92400e',
     fontSize: '13px'
+  },
+  secondaryButton: {
+    border: '1px solid #2563eb',
+    borderRadius: '999px',
+    padding: '12px 16px',
+    backgroundColor: 'white',
+    color: '#2563eb',
+    cursor: 'pointer',
+    fontWeight: '600',
+    minHeight: '44px'
+  },
+  rcaBox: {
+    marginTop: '20px',
+    borderRadius: '12px',
+    border: '1px solid #ddd6fe',
+    backgroundColor: '#faf9ff',
+    padding: '18px'
+  },
+  rcaRow: {
+    marginTop: '10px'
+  },
+  rcaLabel: {
+    fontSize: '11px',
+    fontWeight: '700',
+    letterSpacing: '0.05em',
+    textTransform: 'uppercase',
+    color: '#6d28d9'
+  },
+  rcaColumns: {
+    marginTop: '14px',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: '16px'
+  },
+  rcaTags: {
+    marginTop: '14px',
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px'
+  },
+  tagProcedure: {
+    fontSize: '11.5px',
+    backgroundColor: '#eff6ff',
+    color: '#1e3a8a',
+    padding: '4px 10px',
+    borderRadius: '999px'
+  },
+  tagRegulation: {
+    fontSize: '11.5px',
+    backgroundColor: '#fdf1e0',
+    color: '#92400e',
+    padding: '4px 10px',
+    borderRadius: '999px'
+  },
+  lessonCard: {
+    border: '1px solid #ddd6fe',
+    borderRadius: '12px',
+    padding: '16px',
+    backgroundColor: '#faf9ff'
+  },
+  riskBadge: {
+    fontSize: '11px',
+    fontWeight: '700',
+    padding: '3px 10px',
+    borderRadius: '999px'
+  },
+  riskHigh: {
+    backgroundColor: '#fee2e2',
+    color: '#b91c1c'
+  },
+  riskMedium: {
+    backgroundColor: '#fef3c7',
+    color: '#b45309'
+  },
+  riskLow: {
+    backgroundColor: '#d1fae5',
+    color: '#15803d'
   },
   footer: {
     textAlign: 'center',

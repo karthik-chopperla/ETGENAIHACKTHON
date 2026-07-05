@@ -16,3 +16,6 @@ sqlalchemy>=2.0.0
 # Embedded knowledge graph (entities/relationships), persisted locally —
 # no external graph database required.
 networkx>=3.0
+
+# Only used by evaluate_benchmark.py (dev/eval tool, not the running app)
+requests>=2.31.0

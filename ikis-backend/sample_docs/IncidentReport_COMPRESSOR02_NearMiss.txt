@@ -1,0 +1,18 @@
+NEAR-MISS INCIDENT REPORT - COMPRESSOR-02
+Reported by: T. Sharma, Shift Supervisor | Date: 2026-05-22
+
+DESCRIPTION
+Seal temperature alarm triggered during Unit 2 startup. Operator performed
+manual shutdown before seal failure occurred. No injury, no release.
+
+BACKGROUND
+Seal replacement was recommended in inspection IR-2291 (2026-04-02) with
+target date 2026-04-20. Work was deferred twice by the maintenance planning
+committee to avoid interrupting the Unit 2 production run. Deferral notes
+cite "no available shutdown window before Q2 targets."
+
+CORRECTIVE ACTION
+Seal replaced 2026-05-23. Recommend maintenance planning treat inspector
+target dates as firm unless a documented safety review approves deferral.
+
+Filed under: Near-Miss Register, Unit 2.

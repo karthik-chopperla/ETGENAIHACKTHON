@@ -1,0 +1,22 @@
+INTERNAL AUDIT FINDING - MAINTENANCE DEFERRAL PATTERN
+Auditor: P. Krishnan, Internal Quality & Safety Audit | Date: 2026-06-28
+Scope: Q1-Q2 2026, all units
+
+FINDING
+Reviewed corrective-action tracking across Units 2, 3, and 4. In 3 of the
+last 4 documented near-miss or trip events, the triggering equipment had a
+prior inspection or work-order recommendation that was deferred at least
+once for "production schedule" reasons, with no documented safety review
+of the deferral decision.
+
+Affected equipment: PUMP-001 (WO-4498 deferred, led to WO-4571 stoppage),
+COMPRESSOR-02 (seal replacement deferred twice, near-miss), TURBINE-04
+(lubricant replacement deferred three times, unplanned trip).
+
+RECOMMENDATION
+Maintenance planning process lacks a mandatory safety review gate before
+an inspector-recommended action can be deferred more than once. Recommend
+this become a standing agenda item for the monthly safety committee until
+a formal deferral-review procedure is adopted.
+
+Report filed: 2026-06-28.

@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Any
 import json
 import os
 import asyncio
+import mimetypes
 from datetime import datetime
 import logging
 from dotenv import load_dotenv
@@ -18,6 +19,7 @@ from dotenv import load_dotenv
 # Data processing
 import PyPDF2
 import io
+import base64
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
 from langchain_chroma import Chroma
@@ -26,6 +28,7 @@ from openai import OpenAI as NvidiaClient
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
 NVIDIA_CHAT_MODEL = "meta/llama-3.1-70b-instruct"
 NVIDIA_EMBED_MODEL = "nvidia/nv-embedqa-e5-v5"
+NVIDIA_VISION_MODEL = "meta/llama-3.2-11b-vision-instruct"
 
 # Database
 from sqlalchemy import create_engine, Column, String, DateTime, Text
@@ -155,6 +158,22 @@ class ComplianceGap(BaseModel):
     evidence: List[str]
     remediation_steps: List[str]
 
+class LessonsPattern(BaseModel):
+    pattern: str
+    risk_level: str  # low, medium, high
+    affected_equipment: List[str]
+    supporting_doc_ids: List[str]
+    recommended_action: str
+
+class RCAReport(BaseModel):
+    equipment_id: str
+    immediate_cause: str
+    root_cause: str
+    contributing_factors: List[str]
+    corrective_actions: List[str]
+    relevant_procedures: List[str]
+    relevant_regulations: List[str]
+
 # ============= CORE FUNCTIONS =============
 
 def parse_llm_json(text: str):
@@ -183,6 +202,47 @@ def extract_text_from_pdf(file_content: bytes) -> str:
     except Exception as e:
         logger.error(f"PDF extraction error: {e}")
         raise HTTPException(status_code=400, detail="Failed to extract text from PDF")
+
+IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
+
+def extract_text_from_image(file_content: bytes, mime_type: str = "image/png") -> str:
+    """
+    OCR / document-intelligence for scanned forms and P&ID drawings via a
+    vision-language model (NVIDIA NIM). Reads printed and hand-labeled text,
+    tags, and callouts directly from the image — no separate OCR engine
+    required. Does not attempt schematic/symbol recognition (line routing,
+    instrument bubbles) — text and tag transcription only.
+    """
+    if not NVIDIA_API_KEY:
+        raise HTTPException(status_code=400, detail="NVIDIA_API_KEY not configured; cannot process images")
+
+    b64 = base64.b64encode(file_content).decode()
+    client = NvidiaClient(base_url=NVIDIA_BASE_URL, api_key=NVIDIA_API_KEY)
+
+    prompt = (
+        "This is a scanned industrial document or P&ID-style drawing. Transcribe every piece of "
+        "visible text exactly as written: equipment tags, labels, callouts, handwritten notes, "
+        "table values, stamps, and signatures. Preserve structure with line breaks. If it's a "
+        "diagram, also list the equipment tags and their apparent connections/relationships as "
+        "plain text after the transcription, under a 'DIAGRAM RELATIONSHIPS:' heading."
+    )
+
+    try:
+        completion = client.chat.completions.create(
+            model=NVIDIA_VISION_MODEL,
+            max_tokens=1500,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64}"}}
+                ]
+            }]
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        logger.error(f"Image OCR error: {e}")
+        raise HTTPException(status_code=400, detail="Failed to extract text from image")
 
 def extract_entities_with_llm(text: str) -> Dict[str, Any]:
     """
@@ -328,19 +388,25 @@ def query_rag_system(query: str, top_k: int = 5) -> RAGResponse:
         client = NvidiaClient(base_url=NVIDIA_BASE_URL, api_key=NVIDIA_API_KEY)
 
         prompt = f"""
-        You are an industrial knowledge expert. Answer the following query based on the provided context.
-        Be specific, cite the sources, and provide confidence level (0-1).
+        You are an industrial knowledge expert. Answer the query using ONLY the context below.
+
+        The context was retrieved by vector similarity search, which always returns its closest
+        matches even when nothing in the knowledge base is actually relevant to the query. Before
+        answering, judge for yourself whether the context genuinely addresses the query.
+
+        - If the query is a greeting, small talk, or unrelated to the context, write one natural,
+          conversational sentence explaining that you didn't find anything about that topic in the
+          uploaded documents, and set confidence to 0.0. Do not force an industrial answer out of
+          unrelated context, and do not just say "not relevant" — respond the way a helpful
+          colleague would.
+        - Otherwise, answer specifically, cite the sources, and set a genuine confidence level (0-1).
 
         Query: {query}
 
         Context:
         {context}
 
-        Provide your answer in JSON format:
-        {{
-            "answer": "your detailed answer",
-            "confidence": 0.95
-        }}
+        Respond in JSON format: {{"answer": "...", "confidence": 0.0-1.0}}
         """
 
         completion = client.chat.completions.create(
@@ -358,19 +424,25 @@ def query_rag_system(query: str, top_k: int = 5) -> RAGResponse:
                 "confidence": 0.5
             }
         
-        sources = [
-            {
-                "doc_id": doc.metadata.get("doc_id"),
-                "doc_type": doc.metadata.get("doc_type"),
-                "excerpt": doc.page_content[:200]
-            }
-            for doc in relevant_docs
-        ]
-        
+        confidence = result.get("confidence", 0.5)
+
+        # The model judged the retrieved context irrelevant to the query — don't
+        # show sources that weren't actually used, that reads as a contradiction.
+        sources = []
+        if confidence > 0:
+            sources = [
+                {
+                    "doc_id": doc.metadata.get("doc_id"),
+                    "doc_type": doc.metadata.get("doc_type"),
+                    "excerpt": doc.page_content[:200]
+                }
+                for doc in relevant_docs
+            ]
+
         return RAGResponse(
             answer=result.get("answer", ""),
             sources=sources,
-            confidence=result.get("confidence", 0.5)
+            confidence=confidence
         )
     except Exception as e:
         logger.error(f"RAG query error: {e}")
@@ -380,39 +452,42 @@ def query_rag_system(query: str, top_k: int = 5) -> RAGResponse:
             confidence=0.0
         )
 
+def _get_equipment_history(equipment_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+    """Graph traversal step: documents that DESCRIBE this equipment, most recent first."""
+    with graph_lock:
+        if graph.has_node(equipment_id):
+            doc_ids = [
+                u for u in graph.predecessors(equipment_id)
+                if graph.nodes[u].get("type") == "Document"
+            ]
+        else:
+            doc_ids = []
+        doc_ids.sort(key=lambda d: graph.nodes[d].get("created_at", ""), reverse=True)
+        doc_ids = doc_ids[:limit]
+
+    if not doc_ids:
+        return []
+
+    session = SessionLocal()
+    records = session.query(DocumentRecord).filter(DocumentRecord.id.in_(doc_ids)).all()
+    session.close()
+    return [
+        {
+            "doc_id": r.id,
+            "doc_type": r.doc_type,
+            "uploaded_at": r.uploaded_at.isoformat(),
+            "excerpt": (r.content or "")[:800]
+        }
+        for r in records
+    ]
+
 def analyze_maintenance_patterns(equipment_id: str) -> List[MaintenanceRecommendation]:
     """Analyze historical maintenance data for equipment using the knowledge graph."""
     if not NVIDIA_API_KEY:
         return []
 
     try:
-        # Find documents that DESCRIBE this equipment, most recent first
-        with graph_lock:
-            if graph.has_node(equipment_id):
-                doc_ids = [
-                    u for u in graph.predecessors(equipment_id)
-                    if graph.nodes[u].get("type") == "Document"
-                ]
-            else:
-                doc_ids = []
-            doc_ids.sort(key=lambda d: graph.nodes[d].get("created_at", ""), reverse=True)
-            doc_ids = doc_ids[:10]
-
-        history = []
-        if doc_ids:
-            session = SessionLocal()
-            records = session.query(DocumentRecord).filter(DocumentRecord.id.in_(doc_ids)).all()
-            session.close()
-            history = [
-                {
-                    "doc_id": r.id,
-                    "doc_type": r.doc_type,
-                    "uploaded_at": r.uploaded_at.isoformat(),
-                    "excerpt": (r.content or "")[:800]
-                }
-                for r in records
-            ]
-
+        history = _get_equipment_history(equipment_id)
         client = NvidiaClient(base_url=NVIDIA_BASE_URL, api_key=NVIDIA_API_KEY)
 
         prompt = f"""
@@ -452,57 +527,262 @@ def analyze_maintenance_patterns(equipment_id: str) -> List[MaintenanceRecommend
         logger.error(f"Maintenance analysis error: {e}")
         return []
 
+def perform_rca(equipment_id: str) -> Optional[RCAReport]:
+    """
+    Multi-step Root Cause Analysis agent — three independent retrieval steps
+    feeding one synthesis step, rather than a single flat RAG call:
+      1. Graph traversal -> this equipment's document history
+      2. Vector search -> safety procedures relevant to this equipment
+      3. Vector search -> regulations relevant to this equipment
+      4. LLM synthesis -> structured RCA grounded in all three retrievals
+    """
+    if not NVIDIA_API_KEY:
+        return None
+
+    history = _get_equipment_history(equipment_id)
+    if not history:
+        return None
+
+    procedures_context: List[str] = []
+    regulations_context: List[str] = []
+    if vector_store:
+        try:
+            proc_docs = vector_store.similarity_search(f"safety procedure for {equipment_id}", k=3)
+            procedures_context = [d.page_content[:500] for d in proc_docs]
+        except Exception as e:
+            logger.warning(f"RCA procedure retrieval failed: {e}")
+        try:
+            reg_docs = vector_store.similarity_search(f"regulation requirement for {equipment_id}", k=3)
+            regulations_context = [d.page_content[:500] for d in reg_docs]
+        except Exception as e:
+            logger.warning(f"RCA regulation retrieval failed: {e}")
+
+    history_text = "\n\n".join(f"[{h['doc_id']}] ({h['doc_type']})\n{h['excerpt']}" for h in history)
+    procedures_text = "\n\n".join(procedures_context) if procedures_context else "None found."
+    regulations_text = "\n\n".join(regulations_context) if regulations_context else "None found."
+
+    prompt = f"""
+    You are conducting a Root Cause Analysis for {equipment_id}, drawing on three
+    independently retrieved sources.
+
+    EQUIPMENT HISTORY (work orders, inspections, manuals — retrieved via knowledge
+    graph traversal):
+    {history_text}
+
+    RELATED SAFETY PROCEDURES (retrieved separately via semantic search):
+    {procedures_text}
+
+    RELATED REGULATIONS (retrieved separately via semantic search):
+    {regulations_text}
+
+    Produce a structured Root Cause Analysis. Distinguish the immediate cause (what
+    directly happened) from the root cause (the underlying process or systemic
+    reason it happened), list contributing factors, concrete corrective actions,
+    and which of the retrieved procedures/regulations above are actually relevant.
+    If the history doesn't describe an actual failure, analyze the equipment's
+    biggest latent risk instead.
+
+    Return JSON:
+    {{
+        "immediate_cause": "...",
+        "root_cause": "...",
+        "contributing_factors": ["...", "..."],
+        "corrective_actions": ["...", "..."],
+        "relevant_procedures": ["..."],
+        "relevant_regulations": ["..."]
+    }}
+    """
+
+    try:
+        client = NvidiaClient(base_url=NVIDIA_BASE_URL, api_key=NVIDIA_API_KEY)
+        completion = client.chat.completions.create(
+            model=NVIDIA_CHAT_MODEL,
+            max_tokens=900,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        data = parse_llm_json(completion.choices[0].message.content)
+        return RCAReport(
+            equipment_id=equipment_id,
+            immediate_cause=data.get("immediate_cause", ""),
+            root_cause=data.get("root_cause", ""),
+            contributing_factors=data.get("contributing_factors", []),
+            corrective_actions=data.get("corrective_actions", []),
+            relevant_procedures=data.get("relevant_procedures", []),
+            relevant_regulations=data.get("relevant_regulations", [])
+        )
+    except Exception as e:
+        logger.error(f"RCA error: {e}")
+        return None
+
 def check_compliance_gaps(doc_type: str = "all") -> List[ComplianceGap]:
-    """Check for compliance gaps against regulatory standards."""
+    """
+    Check for compliance gaps. Grounded in real uploaded regulatory documents
+    (doc_type='regulatory') cross-referenced against operational documents when
+    any have been uploaded; falls back to clearly-labeled representative
+    scenarios otherwise.
+    """
     if not NVIDIA_API_KEY:
         return []
 
     try:
-        client = NvidiaClient(base_url=NVIDIA_BASE_URL, api_key=NVIDIA_API_KEY)
+        session = SessionLocal()
+        reg_records = session.query(DocumentRecord).filter(DocumentRecord.doc_type == "regulatory").all()
+        other_records = session.query(DocumentRecord).filter(DocumentRecord.doc_type != "regulatory").limit(10).all()
+        session.close()
 
-        regulations = [
-            "OISD-119: Safety in Petroleum Industry",
-            "Factory Act Sec 13: General requirements",
-            "PESO Code: Storage and handling",
-            "ISO 45001: Occupational health and safety"
-        ]
-        
-        prompt = f"""
-        Given these industrial regulations:
-        {json.dumps(regulations)}
-        
-        Generate 3 realistic compliance gap scenarios:
-        Return JSON array:
-        [
-            {{
-                "regulation_code": "OISD-119",
-                "requirement": "specific requirement from regulation",
-                "gap_scenario": "how this gap might occur",
-                "remediation": ["step1", "step2"]
-            }}
-        ]
-        """
-        
+        grounded = bool(reg_records)
+
+        if grounded:
+            regulations_text = "\n\n".join(f"[{r.id}] {(r.content or '')[:1500]}" for r in reg_records)
+            operations_text = "\n\n".join(
+                f"[{r.id}] ({r.doc_type}) {(r.content or '')[:600]}" for r in other_records
+            ) or "No other operational documents uploaded yet."
+
+            prompt = f"""
+            You are a compliance auditor. Below are regulatory/procedure documents that have
+            actually been uploaded to this system, followed by operational documents (equipment
+            manuals, maintenance logs, inspection reports) also uploaded.
+
+            REGULATORY DOCUMENTS:
+            {regulations_text}
+
+            OPERATIONAL DOCUMENTS:
+            {operations_text}
+
+            Identify specific compliance gaps: places where the operational documents show a
+            requirement from the regulatory documents is not being met, or where evidence of
+            compliance is missing or incomplete. Ground every gap in the actual text provided
+            above — do not invent regulations that were not provided.
+
+            Return a JSON array:
+            [
+                {{
+                    "regulation_code": "short code or name, drawn from the regulatory document",
+                    "requirement": "the specific requirement from the uploaded regulatory text",
+                    "gap_scenario": "the specific evidence from the operational documents showing the gap",
+                    "remediation": ["step1", "step2"]
+                }}
+            ]
+            """
+            max_tok = 1200
+        else:
+            regulations = [
+                "OISD-119: Safety in Petroleum Industry",
+                "Factory Act Sec 13: General requirements",
+                "PESO Code: Storage and handling",
+                "ISO 45001: Occupational health and safety"
+            ]
+            prompt = f"""
+            No regulatory documents have been uploaded yet. Generate 3 representative example
+            compliance gap scenarios — clearly illustrative, not based on real evidence — for
+            these regulations: {json.dumps(regulations)}
+
+            Return a JSON array:
+            [
+                {{
+                    "regulation_code": "OISD-119",
+                    "requirement": "specific requirement from regulation",
+                    "gap_scenario": "how this gap might occur",
+                    "remediation": ["step1", "step2"]
+                }}
+            ]
+            """
+            max_tok = 800
+
+        client = NvidiaClient(base_url=NVIDIA_BASE_URL, api_key=NVIDIA_API_KEY)
         completion = client.chat.completions.create(
             model=NVIDIA_CHAT_MODEL,
-            max_tokens=800,
+            max_tokens=max_tok,
             messages=[{"role": "user", "content": prompt}]
         )
 
         gaps_data = parse_llm_json(completion.choices[0].message.content)
-        
+
         return [
             ComplianceGap(
                 regulation_code=gap["regulation_code"],
                 requirement=gap["requirement"],
-                current_status="Gap identified",
-                evidence=["Document analysis"],
+                current_status="Gap identified" if grounded else "Gap identified (representative scenario — upload regulatory documents to ground this in real evidence)",
+                evidence=["Grounded in uploaded regulatory + operational documents"] if grounded else ["Representative scenario — no regulatory documents uploaded yet"],
                 remediation_steps=gap["remediation"]
             )
             for gap in gaps_data
         ]
     except Exception as e:
         logger.error(f"Compliance check error: {e}")
+        return []
+
+def analyze_lessons_learned() -> List[LessonsPattern]:
+    """
+    Lessons Learned & Failure Intelligence: analyzes incident/near-miss reports
+    across the organization's history to find systemic patterns no single
+    document review would surface, and produce proactive warnings.
+    """
+    if not NVIDIA_API_KEY:
+        return []
+
+    try:
+        session = SessionLocal()
+        records = session.query(DocumentRecord).filter(DocumentRecord.doc_type == "incident_report").all()
+        session.close()
+
+        if not records:
+            return []
+
+        incidents_text = "\n\n".join(
+            f"[{r.id}] uploaded {r.uploaded_at.isoformat()}\n{(r.content or '')[:1200]}"
+            for r in records
+        )
+
+        client = NvidiaClient(base_url=NVIDIA_BASE_URL, api_key=NVIDIA_API_KEY)
+
+        prompt = f"""
+        You are a failure-intelligence analyst. Below are incident, near-miss, and audit
+        reports uploaded to this system, from potentially different units and dates.
+
+        INCIDENT / NEAR-MISS / AUDIT RECORDS:
+        {incidents_text}
+
+        Find systemic patterns that span MULTIPLE documents — the kind of recurring root
+        cause or process failure that no single team reviewing one incident in isolation
+        would notice, but that becomes obvious when the reports are read together. Do not
+        just restate one incident; only report a pattern if at least two documents support it.
+
+        For each pattern, return a proactive warning that could be pushed to operational
+        teams before a similar condition recurs.
+
+        Return a JSON array:
+        [
+            {{
+                "pattern": "description of the recurring systemic issue",
+                "risk_level": "low|medium|high",
+                "affected_equipment": ["EQUIPMENT-ID", "..."],
+                "supporting_doc_ids": ["doc_id1", "doc_id2"],
+                "recommended_action": "specific proactive action to prevent recurrence"
+            }}
+        ]
+        """
+
+        completion = client.chat.completions.create(
+            model=NVIDIA_CHAT_MODEL,
+            max_tokens=1200,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        patterns_data = parse_llm_json(completion.choices[0].message.content)
+
+        return [
+            LessonsPattern(
+                pattern=p["pattern"],
+                risk_level=p.get("risk_level", "medium"),
+                affected_equipment=p.get("affected_equipment", []),
+                supporting_doc_ids=p.get("supporting_doc_ids", []),
+                recommended_action=p["recommended_action"]
+            )
+            for p in patterns_data
+        ]
+    except Exception as e:
+        logger.error(f"Lessons learned analysis error: {e}")
         return []
 
 # ============= FastAPI APP =============
@@ -531,10 +811,16 @@ async def upload_document(
     try:
         content = await file.read()
         doc_id = f"{doc_type}_{datetime.utcnow().timestamp()}"
-        
+        filename_lower = file.filename.lower()
+
         # Extract text
-        if file.filename.endswith('.pdf'):
+        if filename_lower.endswith('.pdf'):
             text = extract_text_from_pdf(content)
+        elif filename_lower.endswith(IMAGE_EXTENSIONS):
+            mime_type = mimetypes.guess_type(file.filename)[0] or "image/png"
+            # Vision-model OCR call runs in a thread — same non-blocking
+            # rationale as the entity-extraction call below.
+            text = await asyncio.to_thread(extract_text_from_image, content, mime_type)
         else:
             text = content.decode('utf-8')
         
@@ -603,6 +889,21 @@ async def get_maintenance_recommendations(equipment_id: str):
         logger.error(f"Maintenance analysis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/maintenance/rca/{equipment_id}")
+async def get_rca_report(equipment_id: str):
+    """Multi-step Root Cause Analysis for specific equipment."""
+    try:
+        report = await asyncio.to_thread(perform_rca, equipment_id)
+        return {
+            "equipment_id": equipment_id,
+            "report": report,
+            "message": None if report else "No document history found for this equipment in the knowledge graph.",
+            "generated_at": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"RCA endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/compliance/gaps")
 async def get_compliance_gaps():
     """Identify compliance gaps across the organization."""
@@ -615,6 +916,20 @@ async def get_compliance_gaps():
         }
     except Exception as e:
         logger.error(f"Compliance check error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/lessons-learned/patterns")
+async def get_lessons_learned():
+    """Find systemic patterns across incident/near-miss/audit records."""
+    try:
+        patterns = await asyncio.to_thread(analyze_lessons_learned)
+        return {
+            "patterns_found": len(patterns),
+            "patterns": patterns,
+            "report_generated_at": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Lessons learned error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/health")
@@ -643,7 +958,9 @@ async def root():
             "upload": "POST /api/documents/upload",
             "query": "POST /api/query",
             "maintenance": "GET /api/maintenance/recommendations/{equipment_id}",
+            "rca": "GET /api/maintenance/rca/{equipment_id}",
             "compliance": "GET /api/compliance/gaps",
+            "lessons_learned": "GET /api/lessons-learned/patterns",
             "health": "GET /api/health"
         }
     }

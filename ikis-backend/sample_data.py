@@ -115,6 +115,74 @@ Recommendations:
 
 Report filed: 2026-06-30.
 """,
+
+    "IncidentReport_COMPRESSOR02_NearMiss.txt": """
+NEAR-MISS INCIDENT REPORT - COMPRESSOR-02
+Reported by: T. Sharma, Shift Supervisor | Date: 2026-05-22
+
+DESCRIPTION
+Seal temperature alarm triggered during Unit 2 startup. Operator performed
+manual shutdown before seal failure occurred. No injury, no release.
+
+BACKGROUND
+Seal replacement was recommended in inspection IR-2291 (2026-04-02) with
+target date 2026-04-20. Work was deferred twice by the maintenance planning
+committee to avoid interrupting the Unit 2 production run. Deferral notes
+cite "no available shutdown window before Q2 targets."
+
+CORRECTIVE ACTION
+Seal replaced 2026-05-23. Recommend maintenance planning treat inspector
+target dates as firm unless a documented safety review approves deferral.
+
+Filed under: Near-Miss Register, Unit 2.
+""",
+
+    "IncidentReport_TURBINE04_Trip.txt": """
+UNPLANNED TRIP REPORT - TURBINE-04
+Reported by: A. Verma, Maintenance Engineer | Date: 2026-06-10
+
+DESCRIPTION
+Turbine tripped on high bearing temperature. 5-hour production loss.
+
+ROOT CAUSE
+Lubrication system inspection (WO-3390, 2026-03-15) recommended bearing
+lubricant replacement within 30 days. Work order was deferred three times
+over 11 weeks; maintenance planning log cites "production schedule
+priority" each time. Lubricant degraded below spec, causing elevated
+bearing friction and the eventual trip.
+
+CORRECTIVE ACTION
+Lubricant replaced, bearing inspected for damage (none found). Planning
+team advised to escalate any inspection-recommended work deferred more
+than twice to the plant safety lead for review.
+
+Filed under: Trip & Incident Log, Unit 4.
+""",
+
+    "AuditFinding_Q1Q2_2026_MaintenanceDeferrals.txt": """
+INTERNAL AUDIT FINDING - MAINTENANCE DEFERRAL PATTERN
+Auditor: P. Krishnan, Internal Quality & Safety Audit | Date: 2026-06-28
+Scope: Q1-Q2 2026, all units
+
+FINDING
+Reviewed corrective-action tracking across Units 2, 3, and 4. In 3 of the
+last 4 documented near-miss or trip events, the triggering equipment had a
+prior inspection or work-order recommendation that was deferred at least
+once for "production schedule" reasons, with no documented safety review
+of the deferral decision.
+
+Affected equipment: PUMP-001 (WO-4498 deferred, led to WO-4571 stoppage),
+COMPRESSOR-02 (seal replacement deferred twice, near-miss), TURBINE-04
+(lubricant replacement deferred three times, unplanned trip).
+
+RECOMMENDATION
+Maintenance planning process lacks a mandatory safety review gate before
+an inspector-recommended action can be deferred more than once. Recommend
+this become a standing agenda item for the monthly safety committee until
+a formal deferral-review procedure is adopted.
+
+Report filed: 2026-06-28.
+""",
 }
 
 

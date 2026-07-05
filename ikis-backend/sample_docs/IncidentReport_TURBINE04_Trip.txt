@@ -1,0 +1,19 @@
+UNPLANNED TRIP REPORT - TURBINE-04
+Reported by: A. Verma, Maintenance Engineer | Date: 2026-06-10
+
+DESCRIPTION
+Turbine tripped on high bearing temperature. 5-hour production loss.
+
+ROOT CAUSE
+Lubrication system inspection (WO-3390, 2026-03-15) recommended bearing
+lubricant replacement within 30 days. Work order was deferred three times
+over 11 weeks; maintenance planning log cites "production schedule
+priority" each time. Lubricant degraded below spec, causing elevated
+bearing friction and the eventual trip.
+
+CORRECTIVE ACTION
+Lubricant replaced, bearing inspected for damage (none found). Planning
+team advised to escalate any inspection-recommended work deferred more
+than twice to the plant safety lead for review.
+
+Filed under: Trip & Incident Log, Unit 4.
