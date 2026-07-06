@@ -89,6 +89,7 @@ python evaluate_benchmark.py   # writes BENCHMARK_RESULTS.md
 | Method | Endpoint | Purpose |
 |---|---|---|
 | POST | `/api/documents/upload` | Upload a document (text/PDF/image); extracts entities, embeds, updates the knowledge graph |
+| GET | `/api/documents` | List every document actually in the knowledge base |
 | POST | `/api/query` | RAG query with citations and confidence |
 | GET | `/api/maintenance/recommendations/{equipment_id}` | Graph-grounded predictive maintenance |
 | GET | `/api/maintenance/rca/{equipment_id}` | Multi-step Root Cause Analysis |

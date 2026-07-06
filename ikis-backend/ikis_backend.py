@@ -1094,6 +1094,7 @@ async def root():
         "docs": "/docs",
         "endpoints": {
             "upload": "POST /api/documents/upload",
+            "documents": "GET /api/documents",
             "query": "POST /api/query",
             "maintenance": "GET /api/maintenance/recommendations/{equipment_id}",
             "rca": "GET /api/maintenance/rca/{equipment_id}",
