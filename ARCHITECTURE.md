@@ -11,6 +11,8 @@ components, no placeholders. Every piece named here is running code.
 
 ![IKIS architecture diagram](docs/architecture-diagram.png)
 
+PDF version (better for printing/sharing outside GitHub): [docs/architecture-diagram.pdf](docs/architecture-diagram.pdf)
+
 Text version of the same diagram (for viewers where the image doesn't load):
 
 ```
