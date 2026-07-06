@@ -9,6 +9,10 @@ components, no placeholders. Every piece named here is running code.
 
 ## 1. Component Diagram
 
+![IKIS architecture diagram](docs/architecture-diagram.png)
+
+Text version of the same diagram (for viewers where the image doesn't load):
+
 ```
                         ┌─────────────────────────────┐
                         │        React Frontend        │
