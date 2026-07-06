@@ -957,6 +957,38 @@ async def upload_document(
         logger.error(f"Upload error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/documents")
+async def list_documents():
+    """List every document actually in the knowledge base right now."""
+    session = SessionLocal()
+    records = session.query(DocumentRecord).order_by(DocumentRecord.uploaded_at.desc()).all()
+    session.close()
+
+    def entity_counts(record):
+        try:
+            entities = json.loads(record.extracted_entities or "{}")
+        except json.JSONDecodeError:
+            entities = {}
+        return {
+            "equipment": len(entities.get("equipment", [])),
+            "procedures": len(entities.get("procedures", [])),
+            "regulations": len(entities.get("regulations", [])),
+        }
+
+    return {
+        "documents_found": len(records),
+        "documents": [
+            {
+                "doc_id": r.id,
+                "filename": r.filename,
+                "doc_type": r.doc_type,
+                "uploaded_at": r.uploaded_at.isoformat(),
+                "entities_found": entity_counts(r)
+            }
+            for r in records
+        ]
+    }
+
 @app.post("/api/query", response_model=RAGResponse)
 async def query_knowledge_base(request: QueryRequest):
     """Query the RAG system for expert knowledge retrieval."""

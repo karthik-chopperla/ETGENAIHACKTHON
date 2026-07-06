@@ -216,6 +216,15 @@ export default function IKISApp() {
     axios.get(`${BACKEND_URL}/api/health`).catch(() => {
       setMessage(`⚠️ Backend not reachable. The prototype is running in demo mode.`);
     });
+    axios.get(`${BACKEND_URL}/api/documents`).then((response) => {
+      const existing = (response.data.documents || []).map((doc) => ({
+        filename: doc.filename,
+        doc_type: doc.doc_type,
+        uploaded_at: new Date(doc.uploaded_at).toLocaleString(),
+        entities_found: doc.entities_found
+      }));
+      if (existing.length) setDocuments(existing);
+    }).catch(() => {});
   }, []);
 
   return (
